@@ -1,4 +1,4 @@
-ARGUS <img src="./ARGUS_utils/.hi-UNI-logo.png" width="280px" align="right" />
+ARGUS <img src="./ARGUS_utils/ARGUS_logo.png" width="280px" align="right" />
 ===========
 
 Official code for **A Hierarchical Geometry-guided Transformer for Histological Subtyping of Primary Liver Cancer**.
