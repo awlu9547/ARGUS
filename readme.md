@@ -1,19 +1,15 @@
-hi-UNI <img src="./utils/.hi-UNI-logo.png" width="280px" align="right" />
+ARGUS <img src="./ARGUS_utils/.hi-UNI-logo.png" width="280px" align="right" />
 ===========
 
-Official code for **Prediction of molecular subtypes for endometrial cancer based on hierarchical foundation model**. _Bioinformatics_
+Official code for **A Hierarchical Geometry-guided Transformer for Histological Subtyping of Primary Liver Cancer**.
 
-[Journal link](https://doi.org/10.1093/bioinformatics/btaf059) | [Cite](https://github.com/HaoyuCui/hi-UNI?tab=readme-ov-file#Reference)
-
-> hi-UNI: hierarchical UNI is used for whole slide image classification, using a weakly supervised pipeline. Our method achieved state-of-the-art performance, offering cost-effective and fast molecular subtyping for endometrial cancer.
+> ARGUS (A hieRarchical Geometry-gUided tranSformer) captures macro-meso-micro hierarchical information within the tumor microenvironment for liver cancer histological subtyping.
 
 ## Overview
 
-<img width="1000" alt="image" align="center" src="https://github.com/user-attachments/assets/bcd49310-8c6d-4f74-89ee-33395315e1bf" />
+<img width="1000" alt="ARGUS Framework" align="center" src="./paper/ARGUS_framework.pdf" />
 
 ## Installation
-
-Install the dependencies 
 
 ```bash
 pip install -r requirements.txt
@@ -21,14 +17,13 @@ pip install -r requirements.txt
 
 ## Preprocessing
 
-1. We have uploaded another repo for data preprocessing: [WSI_Segmenter](https://github.com/HaoyuCui/WSI_Segmenter). Which can also be found in the [./preprocess](./preprocess) directory. The detailed patch extraction and segmentation steps can be found in the [./preprocess/readme.md](preprocess/readme.md). 
+1. Data preprocessing: [WSI_Segmenter](https://github.com/HaoyuCui/WSI_Segmenter). Also available in [./preprocess](./preprocess).
 
-2. Extract raw patches to at least 1024x1024 resolution, use [tiatoolbox](https://github.com/TissueImageAnalytics/tiatoolbox) or [DeepZoom](https://github.com/ncoudray/DeepPATH/blob/master/DeepPATH_code/00_preprocessing/0b_tileLoop_deepzoom6.py) for patch extraction. The tumor segmentation network can be easily added to these pipelines.
-
+2. Extract raw patches to at least 1024x1024 resolution using [tiatoolbox](https://github.com/TissueImageAnalytics/tiatoolbox) or [DeepZoom](https://github.com/ncoudray/DeepPATH/blob/master/DeepPATH_code/00_preprocessing/0b_tileLoop_deepzoom6.py).
 
 ## Data preparation
 
-1. Prepare the data in the following structure, png or jpeg format is supported. Note that extracting patches only from the tumor region is recommended.
+1. Prepare data in the following structure (png/jpeg format):
 
     ```markdown
     ├── data
@@ -37,112 +32,86 @@ pip install -r requirements.txt
     │   │   ├── patch_2.png
     │   │   ├── ...
     │   ├── slide_2
-    │   │   ├── patch_1.png
-    │   │   ├── patch_2.png
     │   │   ├── ...
-    │   ├── ...
     │   └── slide_n
-    │       ├── ...
-    │       └── patch_n.png
+    │       └── ...
     ```
 
-
-
-2. Create a hierarchical structure for the data.
+2. Create hierarchical patches:
 
     ```bash
-    python utils/create_hi_patches.py --input <INPUT_DIR> --output <OUTPUT_DIR> --how non-blank
+    python ARGUS_utils/create_hi_patches.py --input <INPUT_DIR> --output <OUTPUT_DIR> --how non-blank
     ```
     
-    `--how` : **center** (center-crop) or **non-blank** (selective-sampling, proposed in the paper)
+    `--how`: **center** (center-crop) or **non-blank** (selective-sampling)
 
-3. Organize your data like `example.csv`. Create k-fold split for the data.
+3. Organize data like `example.csv` and create k-fold splits:
 
     ```bash
-    python utils/gen_kfold_split.py --csv <CSV_PATH>  --dir <STEP_2_OUTPUT_DIR> --k 5 --on slide
+    python ARGUS_utils/gen_kfold_split.py --csv <CSV_PATH> --dir <STEP_2_OUTPUT_DIR> --k 5 --on patient
     ```
     
-    `--on slide` split the data on slide level
-    
-    `--on patient` split the data on patient level (use name column)
-   
-   A directory named `kf` will be created in the current directory.
+    `--on slide` | `--on patient` (use name column)
 
-4. Apply for the UNI model from <a href="https://huggingface.co/MahmoodLab/UNI"><img src="https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000"/></a> and download the `pytorch_model.bin`.
+4. Download UNI weights from <a href="https://huggingface.co/MahmoodLab/UNI"><img src="https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000"/></a> (`pytorch_model.bin`).
 
-5. Modify the [config.yaml](config.yaml) file to set hyperparameters and UNI's storage path.
-
-    - Hyperparameters: **batch_size**, **lr**, **epochs**, **iters_to_val**, **save_best**
-    
-    - UNI config: **freeze_ratio** (for ViT blocks), **cmb** (hi-UNI combinations), **UNI_path** 
-    
-    - Task-specific config: **class_names**
+5. Modify [config.yaml](config.yaml):
+    - **batch_size**, **lr**, **epochs**, **iters_to_val**, **save_best**
+    - **freeze_ratio**, **cmb** (hierarchical FoV combinations: `s`, `m`, `l`, `sm`, `sl`, `ml`, `sml`), **UNI_path**
+    - **class_names** (default: `['Fine', 'Small', 'Large']` for ICC subtyping)
 
 ## Train and evaluate
 
-1. Train & evaluate a single fold (e.g., fold 1) and evaluate on the validation set
-    ```bash
-    python train.py --fold 1
-    ```
+```bash
+# Single fold
+python train.py --fold 1
 
-2. Train & evaluate all folds (for Windows)
-    ```bash
-    python ./scripts/train_kf.py
-    ```
-   Train & evaluate all folds (for Linux)
-    ```bash
-    sh ./scripts/train_kf.sh
-    ```
+# All folds (Windows)
+python ./scripts/train_kf.py
 
-3. The results will be saved in the `runs/` directory.
+# All folds (Linux)
+sh ./scripts/train_kf.sh
+```
 
-   In the format of:
-   ```txt
-    ├── runs
-    │   ├── {cmbs}_{freeze_ration}  # configuration
-    │   │   ├── 1  # fold name
-    │   │   │   ├── {fold}_best.pth  # best model
-    │   │   │   ├── slide_{iter}.png  # slide-level ROC
-    │   │   │   ├── ...
-    │   │   ├── ...
-    │   ...
-   ```
-   
+Results saved to `runs/{cmb}_{freeze_ratio}/{fold}/`.
+
+## Model Architecture
+
+ARGUS consists of three key components:
+
+| Module | Full Name | Description |
+|--------|-----------|-------------|
+| **HFA** | Hierarchical FoVs Alignment | Bidirectional cross-attention fusion of multi-scale FoV features |
+| **MGF** | Micro-level Geometric Feature | Nucleus-level geometric features via Hover-Net + GCN |
+| **GPGF** | Geometry Prior Guided Fusion | Cross-modal transformer fusing morphological and geometric features |
 
 ## Comparison experiments
 
-We are grateful to the authors for sharing their code. We use CLAM for data preprocessing and feature extraction in comparison experiments.
-
-| Model      | Authors          | GitHub link                                             |
-|---------------|---------------|---------------------------------------------------------|
-| CLAM          | Lu et al.     | [https://github.com/mahmoodlab/CLAM](https://github.com/mahmoodlab/CLAM) |
-| DTFD-MIL      | Zhang et al.  | [https://github.com/hrzhang1123/DTFD-MIL](https://github.com/hrzhang1123/DTFD-MIL) |
-| SETMIL        | Zhao et al.   | [https://github.com/Louis-YuZhao/SETMIL](https://github.com/Louis-YuZhao/SETMIL) |
-| TransMIL      | Shao et al.   | [https://github.com/szc19990412/TransMIL](https://github.com/szc19990412/TransMIL) |
-| im4MEC        | Fremond et al.| [https://github.com/AIRMEC/im4MEC](https://github.com/AIRMEC/im4MEC) |
-
+| Model | Authors | GitHub |
+|-------|---------|--------|
+| ABMIL | Ilse et al. | [https://github.com/AMLab-Amsterdam/attention_deep_mil](https://github.com/AMLab-Amsterdam/attention_deep_mil) |
+| DSMIL | Li et al. | [https://github.com/binliangcs/DSMIL](https://github.com/binliangcs/DSMIL) |
+| CLAM | Lu et al. | [https://github.com/mahmoodlab/CLAM](https://github.com/mahmoodlab/CLAM) |
+| TransMIL | Shao et al. | [https://github.com/szc19990412/TransMIL](https://github.com/szc19990412/TransMIL) |
+| Patch-GCN | Zhang et al. | [https://github.com/HanxunH/Patch-GCN](https://github.com/HanxunH/Patch-GCN) |
 
 ## License
 
-© [IMIC](https://imic.nuist.edu.cn/) - This code is made available under the GPLv3 License and is available for non-commercial academic purposes.
+© [IMIC](https://imic.nuist.edu.cn/) - GPLv3 License for non-commercial academic use.
 
 ## Reference
 
-If you find our work useful in your research, please consider citing our paper:
-
-Haoyu Cui, Qinhao Guo, Jun Xu, Xiaohua Wu, Chengfei Cai, Yiping Jiao, Wenlong Ming, Hao Wen, Xiangxue Wang, Prediction of molecular subtypes for endometrial cancer based on hierarchical foundation model, _Bioinformatics_, 2025
+If you find ARGUS useful, please cite:
 
 ```bibtex
-@article{10.1093/bioinformatics/btaf059,
-    author = {Cui, Haoyu and Guo, Qinhao and Xu, Jun and Wu, Xiaohua and Cai, Chengfei and Jiao, Yiping and Ming, Wenlong and Wen, Hao and Wang, Xiangxue},
-    title = {Prediction of molecular subtypes for endometrial cancer based on hierarchical foundation model},
-    journal = {Bioinformatics},
-    pages = {btaf059},
-    year = {2025},
-    month = {02},
-    issn = {1367-4811},
-    doi = {10.1093/bioinformatics/btaf059},
-    url = {https://doi.org/10.1093/bioinformatics/btaf059},
-}
+@INPROCEEDINGS{11357200,
+  author={Lu, Anwen and Liu, Mingxin and Jiao, Yiping and Xu, Geyang and Gong, Hongyi and Cai, Chengfei and Chen, Jun and Xu, Jun},
+  booktitle={2025 IEEE International Conference on Bioinformatics and Biomedicine (BIBM)}, 
+  title={A Hierarchical Geometry-Guided Transformer for Histological Subtyping of Primary Liver Cancer}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={3874-3877},
+  keywords={Liver cancer;Pathology;Weak supervision;Tumor microenvironment;Liver;Morphology;Computer architecture;Transformers;Complexity theory;Tumors;Computational Pathology;Histological Subtyping;Weakly-Supervised Learning;Geometric Representation},
+  doi={10.1109/BIBM66473.2025.11357200}}
 ```
-
