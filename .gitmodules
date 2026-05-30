@@ -1,3 +1,0 @@
-[submodule "preprocess"]
-	path = preprocess
-	url = https://github.com/HaoyuCui/WSI_Segmenter.git
