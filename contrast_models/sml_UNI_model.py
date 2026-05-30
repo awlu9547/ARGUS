@@ -43,12 +43,26 @@ def freeze_layers(vit_model, freeze_blocks_ratio, freeze_patch_embed=True,
 
 
 def create_model(model_name, freeze_ratio, ckpt_path=None):
-    uni_model = timm.create_model(
-        model_name, img_size=224, patch_size=16, num_classes=0, init_values=1e-5, dynamic_img_size=True
-    )
+    timm_kwargs = {
+        'img_size': 224,
+        'patch_size': 14,
+        'depth': 24,
+        'num_heads': 24,
+        'init_values': 1e-5,
+        'embed_dim': 1536,
+        'mlp_ratio': 2.66667 * 2,
+        'num_classes': 0,
+        'no_embed_class': True,
+        'mlp_layer': timm.layers.SwiGLUPacked,
+        'act_layer': torch.nn.SiLU,
+        'reg_tokens': 8,
+        'dynamic_img_size': True
+    }
+    uni_model = timm.create_model(model_name, pretrained=False, **timm_kwargs)
 
     if ckpt_path is not None:
-        uni_model.load_state_dict(torch.load(ckpt_path, map_location=torch.device("cpu")), strict=True)
+        uni_model.load_state_dict(torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=True),
+                                  strict=True)
         print(f'Loaded pretrained weights from {ckpt_path}')
     else:
         initialize_weights(uni_model)
@@ -62,11 +76,11 @@ def get_trainable_params(_model):
     return sum(p.numel() for p in _model.parameters() if p.requires_grad)
 
 
-class hiUNI(nn.Module):
+class sml_UNI(nn.Module):
     def __init__(self, n_classes, freeze_ratio, cmb, ckpt_path):
         super().__init__()
 
-        backbone = create_model("vit_large_patch16_224", freeze_ratio, ckpt_path=ckpt_path)
+        backbone = create_model("vit_giant_patch14_224", freeze_ratio, ckpt_path=ckpt_path)
 
         self.cmb = cmb
         self.cmb_len = len(cmb)
@@ -75,32 +89,16 @@ class hiUNI(nn.Module):
         for _ in cmb:
             self.backbones.append(deepcopy(backbone))
 
-        self.mlp = nn.Sequential(
-            nn.Linear(self.cmb_len * 1024, 1024),
+        self.classifier = nn.Sequential(
+            nn.Linear(self.cmb_len * 1536, 1536),
             nn.GELU(),
             nn.Dropout(0.25),
-            nn.Linear(1024, n_classes)
+            nn.Linear(1536, n_classes)
         )
 
     def forward(self, x):
         outputs = [backbone(x[:, i, :, :, :]) for i, backbone in enumerate(self.backbones)]
         x = torch.stack(outputs, dim=1)  # [batch_size, cmb_len, 1024]
         x = x.view(x.size(0), -1)
-        x = self.mlp(x)
+        x = self.classifier(x)
         return x
-
-
-# for debugging
-if __name__ == '__main__':
-    combination = 'sml'
-    hf_weight_path = r'pytorch_model.bin'  # replace with yours
-    assert os.path.exists(hf_weight_path), "Please download the weights from HuggingFace and replace the path."
-    model = hiUNI(n_classes=4, freeze_ratio=0.6, cmb=combination,
-                  ckpt_path=hf_weight_path).cuda()  # from HuggingFace
-    # print(model)
-    x = torch.randn(2, 3, 3, 224, 224).cuda()  # [batch_size, cmb_len, 3, 224, 224]
-    output = model(x)
-    print(output.shape)
-    param_number = get_trainable_params(model)
-    print(f'Trainable parameters: {round(param_number / 1e6, 2)}M')
-
