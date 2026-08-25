@@ -7,7 +7,7 @@ Official code for **A Hierarchical Geometry-guided Transformer for Histological 
 
 ## Overview
 
-<img width="1000" alt="ARGUS Framework" align="center" src="./paper/ARGUS_framework.pdf" />
+<img width="1000" alt="ARGUS Framework" align="center" src="./ARGUS_utils/ARGUS_logo.png" />
 
 ## Installation
 
